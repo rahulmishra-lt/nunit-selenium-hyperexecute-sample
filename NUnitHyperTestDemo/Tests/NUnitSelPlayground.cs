@@ -1,66 +1,69 @@
 using System;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Remote;
+using OpenQA.Selenium.Chrome;
+using OpenQA.Selenium.Firefox;
 using NUnit.Framework;
-using System.Threading;
 using OpenQA.Selenium.Support.UI;
 using AventStack.ExtentReports;
+using AventStack.ExtentReports.Model;
 using AventStack.ExtentReports.Reporter;
 using System.IO;
 using NUnit.Framework.Interfaces;
+using System.Collections.Generic;
 
-namespace NUnitSeleniumPlayground
+namespace NUnitLoginTest
 {
     [TestFixture("chrome", "latest-1", "Windows 10")]
     [TestFixture("firefox", "latest-1", "Windows 10")]
-    // [TestFixture("chrome", "latest-1", "Linux")]
-    // [TestFixture("firefox", "latest-1", "Linux")]
     [Parallelizable(ParallelScope.Self)]
 
-    [Category("SeleniumPlayGround")]
-    public class NUnitSeleniumSample2
+    [Category("LoginTest")]
+    public class NUnitLoginSample
     {
         public static string gridURL = "@hub.lambdatest.com/wd/hub";
-        private String test_url = "https://www.lambdatest.com/selenium-playground/";
+        private readonly string test_url = "https://the-internet.herokuapp.com/login";
 
         public static string lt_username = NUnitToDo.NUnitSeleniumSample.LT_USERNAME;
         public static string lt_access_key = NUnitToDo.NUnitSeleniumSample.LT_ACCESS_KEY;
 
-        ThreadLocal<IWebDriver> driver = new ThreadLocal<IWebDriver>();
-        private String browser;
-        private String version;
-        private String os;
+        private readonly ThreadLocal<IWebDriver> driver = new ThreadLocal<IWebDriver>();
+        private readonly string browser;
+        private readonly string version;
+        private readonly string os;
 
-        public static ExtentReports _extent;
-        public ExtentTest _test;
-        public String TC_Name;
-        public static String dirPath = "Reports//SeleniumPlaygroundTest";
+        public static ExtentReports? _extent;
+        public ExtentTest? _test;
+        public string? TC_Name;
+        public static string dirPath = "Reports//LoginTest";
 
-        /* In ideal cases, it is recommended to create a single report that has links to the resective tests */
-        /* A seperate report is created here for demonstration of download artifacts management functionality */
         [OneTimeSetUp]
         protected void ExtentStart()
         {
-            var path = System.Reflection.Assembly.GetCallingAssembly().CodeBase;
-            var actualPath = path.Substring(0, path.LastIndexOf("bin"));
-            var projectPath = new Uri(actualPath).LocalPath;
+            var path = System.Reflection.Assembly.GetCallingAssembly().Location;
+            var actualPath = Path.GetDirectoryName(path)!;
+            var projectPath = Path.GetFullPath(Path.Combine(actualPath, "..", "..", "..")) + Path.DirectorySeparatorChar;
 
-            Directory.CreateDirectory(projectPath.ToString() + dirPath);
-            var reportPath = projectPath + dirPath + "//SeleniumPlaygroundReport.html";
+            Directory.CreateDirectory(projectPath + dirPath);
+            var reportPath = projectPath + dirPath + "//LoginTestReport.html";
 
-            /* For Version 3 */
-            /* var htmlReporter = new ExtentV3HtmlReporter(reportPath); */
-            /* For version 4 --> Creates Index.html */
-            var htmlReporter = new ExtentHtmlReporter(reportPath);
+            /* ExtentReports 5.x uses ExtentSparkReporter */
+            var sparkReporter = new ExtentSparkReporter(reportPath);
+            
+            /* Configure reporter programmatically for ExtentReports 5 */
+            sparkReporter.Config.Theme = AventStack.ExtentReports.Reporter.Config.Theme.Standard;
+            sparkReporter.Config.DocumentTitle = "Login Test Report with NUnit and Extent Reports";
+            sparkReporter.Config.ReportName = "Login Testing on HyperTest Grid";
+            sparkReporter.Config.Encoding = "UTF-8";
+            
             _extent = new ExtentReports();
-            _extent.AttachReporter(htmlReporter);
-            _extent.AddSystemInfo("Host Name", "Selenium Playground Testing on HyperTest Grid");
+            _extent.AttachReporter(sparkReporter);
+            _extent.AddSystemInfo("Host Name", "Login Testing on HyperTest Grid");
             _extent.AddSystemInfo("Environment", "Windows Platform");
             _extent.AddSystemInfo("UserName", "User");
-            htmlReporter.LoadConfig(projectPath + "Configurations//report-config.xml");
         }
 
-        public NUnitSeleniumSample2(String browser, String version, String os)
+        public NUnitLoginSample(string browser, string version, string os)
         {
             this.browser = browser;
             this.version = version;
@@ -70,111 +73,160 @@ namespace NUnitSeleniumPlayground
         [SetUp]
         public void Init()
         {
+            /* Selenium 4 uses browser-specific Options classes instead of DesiredCapabilities */
+            DriverOptions options;
 
-            DesiredCapabilities capabilities = new DesiredCapabilities();
-            capabilities.SetCapability(CapabilityType.BrowserName, browser);
-            capabilities.SetCapability(CapabilityType.Version, version);
-            capabilities.SetCapability(CapabilityType.Platform, os);
-            capabilities.SetCapability("build", "[HyperTest] Selenium C# Playground Demo");
+            if (browser.ToLower() == "chrome")
+            {
+                var chromeOptions = new ChromeOptions();
+                chromeOptions.BrowserVersion = version;
+                chromeOptions.PlatformName = os;
+                chromeOptions.AddAdditionalOption("LT:Options", new Dictionary<string, object>
+                {
+                    { "build", "[HyperTest] Selenium C# Login Demo" },
+                    { "name", $"{TestContext.CurrentContext.Test.ClassName}:{TestContext.CurrentContext.Test.MethodName}" },
+                    { "user", lt_username },
+                    { "accessKey", lt_access_key }
+                });
+                options = chromeOptions;
+            }
+            else if (browser.ToLower() == "firefox")
+            {
+                var firefoxOptions = new FirefoxOptions();
+                firefoxOptions.BrowserVersion = version;
+                firefoxOptions.PlatformName = os;
+                firefoxOptions.AddAdditionalOption("LT:Options", new Dictionary<string, object>
+                {
+                    { "build", "[HyperTest] Selenium C# Login Demo" },
+                    { "name", $"{TestContext.CurrentContext.Test.ClassName}:{TestContext.CurrentContext.Test.MethodName}" },
+                    { "user", lt_username },
+                    { "accessKey", lt_access_key }
+                });
+                options = firefoxOptions;
+            }
+            else
+            {
+                throw new ArgumentException($"Unsupported browser: {browser}");
+            }
 
-            capabilities.SetCapability("user", NUnitToDo.NUnitSeleniumSample.LT_USERNAME);
-            capabilities.SetCapability("accessKey", NUnitToDo.NUnitSeleniumSample.LT_ACCESS_KEY);
-
-            capabilities.SetCapability("name",
-            String.Format("{0}:{1}",
-            TestContext.CurrentContext.Test.ClassName,
-            TestContext.CurrentContext.Test.MethodName));
-            driver.Value = new RemoteWebDriver(new Uri("https://" + lt_username + ":" + lt_access_key + gridURL),
-                            capabilities, TimeSpan.FromSeconds(600));
+            driver.Value = new RemoteWebDriver(
+                new Uri($"https://{lt_username}:{lt_access_key}{gridURL}"),
+                options.ToCapabilities(),
+                TimeSpan.FromSeconds(600));
 
             Console.Out.WriteLine(driver);
         }
 
         [Test]
-        public void SeleniumPlayGroundTest()
+        public void LoginSuccessTest()
         {
-            String context_name = TestContext.CurrentContext.Test.Name + " on " + browser + " " + version + " " + os;
+            string context_name = TestContext.CurrentContext.Test.Name + " on " + browser + " " + version + " " + os;
             TC_Name = context_name;
 
-            _test = _extent.CreateTest(context_name);
+            _test = _extent!.CreateTest(context_name);
 
-            Console.WriteLine("Navigating to Selenium Playground");
-            driver.Value.Navigate().GoToUrl(test_url);
+            Console.WriteLine("Navigating to Login Page");
+            driver.Value!.Navigate().GoToUrl(test_url);
 
+            /* Wait for page to load */
+            var wait = new WebDriverWait(driver.Value, TimeSpan.FromSeconds(10));
+            wait.Until(d => d.FindElement(By.Id("username")).Displayed);
 
-            IWebElement element = driver.Value.FindElement(By.XPath("//a[.='Input Form Submit']"));
-            element.Click();
+            /* Enter username */
+            IWebElement usernameField = driver.Value.FindElement(By.Id("username"));
+            usernameField.Clear();
+            usernameField.SendKeys("tomsmith");
+            Console.WriteLine("Entered username: tomsmith");
 
-            String current_url = driver.Value.Url;
-            Console.WriteLine("Current URL is " + current_url);
+            /* Enter password */
+            IWebElement passwordField = driver.Value.FindElement(By.Id("password"));
+            passwordField.Clear();
+            passwordField.SendKeys("SuperSecretPassword!");
+            Console.WriteLine("Entered password");
 
-            IWebElement name = driver.Value.FindElement(By.XPath("//input[@id='name']"));
-            name.SendKeys("Testing");
+            /* Click Login button */
+            IWebElement loginButton = driver.Value.FindElement(By.CssSelector("button[type='submit']"));
+            loginButton.Click();
+            Console.WriteLine("Clicked Login button");
 
-            IWebElement email_address = driver.Value.FindElement(By.Id("inputEmail4"));
-            email_address.SendKeys("testing@testing.com");
+            /* Wait for successful login - check for flash message */
+            wait.Until(d => d.FindElement(By.Id("flash")).Displayed);
 
-            IWebElement password = driver.Value.FindElement(By.XPath("//input[@name='password']"));
-            password.SendKeys("password");
+            /* Verify successful login */
+            IWebElement flashMessage = driver.Value.FindElement(By.Id("flash"));
+            string messageText = flashMessage.Text;
+            
+            Assert.That(messageText, Does.Contain("You logged into a secure area!"));
+            Console.WriteLine("Login successful - verified flash message");
 
-            IWebElement company = driver.Value.FindElement(By.CssSelector("#company"));
-            company.SendKeys("LambdaTest");
+            /* Verify we're on the secure page */
+            Assert.That(driver.Value.Url, Does.Contain("/secure"));
+            Console.WriteLine("Verified URL contains /secure");
+        }
 
-            IWebElement website = driver.Value.FindElement(By.CssSelector("#websitename"));
-            website.SendKeys("https://www.lambdatest.com");
+        [Test]
+        public void LoginFailureTest()
+        {
+            string context_name = TestContext.CurrentContext.Test.Name + " on " + browser + " " + version + " " + os;
+            TC_Name = context_name;
 
-            IWebElement countryDropDown = driver.Value.FindElement(By.XPath("//select[@name='country']"));
-            SelectElement selectElement = new SelectElement(countryDropDown);
-            selectElement.SelectByText("United States");
+            _test = _extent!.CreateTest(context_name);
 
-            IWebElement city = driver.Value.FindElement(By.XPath("//input[@id='inputCity']"));
-            city.SendKeys("San Jose");
+            Console.WriteLine("Navigating to Login Page");
+            driver.Value!.Navigate().GoToUrl(test_url);
 
-            IWebElement address1 = driver.Value.FindElement(By.CssSelector("[placeholder='Address 1']"));
-            address1.SendKeys("Googleplex, 1600 Amphitheatre Pkwy");
+            /* Wait for page to load */
+            var wait = new WebDriverWait(driver.Value, TimeSpan.FromSeconds(10));
+            wait.Until(d => d.FindElement(By.Id("username")).Displayed);
 
-            IWebElement address2 = driver.Value.FindElement(By.CssSelector("[placeholder='Address 2']"));
-            address2.SendKeys(" Mountain View, CA 94043");
+            /* Enter invalid username */
+            IWebElement usernameField = driver.Value.FindElement(By.Id("username"));
+            usernameField.Clear();
+            usernameField.SendKeys("invaliduser");
+            Console.WriteLine("Entered invalid username");
 
-            IWebElement state = driver.Value.FindElement(By.CssSelector("#inputState"));
-            state.SendKeys("California");
+            /* Enter invalid password */
+            IWebElement passwordField = driver.Value.FindElement(By.Id("password"));
+            passwordField.Clear();
+            passwordField.SendKeys("wrongpassword");
+            Console.WriteLine("Entered invalid password");
 
-            IWebElement zipcode = driver.Value.FindElement(By.CssSelector("#inputZip"));
-            zipcode.SendKeys("94088");
+            /* Click Login button */
+            IWebElement loginButton = driver.Value.FindElement(By.CssSelector("button[type='submit']"));
+            loginButton.Click();
+            Console.WriteLine("Clicked Login button");
 
-            /* Click on the Submit button */
-            IWebElement submit_button = driver.Value.FindElement(By.CssSelector("#seleniumform > div.text-right.mt-20 > button"));
-            submit_button.Click();
+            /* Wait for error message */
+            wait.Until(d => d.FindElement(By.Id("flash")).Displayed);
 
-            /* Assert if the page contains a certain text */
-            bool bValue = driver.Value.PageSource.Contains("Thanks for contacting us, we will get back to you shortly");
+            /* Verify error message appears */
+            IWebElement flashMessage = driver.Value.FindElement(By.Id("flash"));
+            string messageText = flashMessage.Text;
+            
+            Assert.That(messageText, Does.Contain("Your username is invalid!"));
+            Console.WriteLine("Login failed as expected - verified error message");
 
-            if (bValue)
-            {
-                Console.WriteLine("Input Form Demo successful");
-            }
-            else
-            {
-                Console.WriteLine("Input Form Demo failed");
-            }
+            /* Verify we're still on the login page */
+            Assert.That(driver.Value.Url, Does.Contain("/login"));
+            Console.WriteLine("Verified still on login page");
         }
 
         [OneTimeTearDown]
         protected void ExtentClose()
         {
             Console.WriteLine("OneTimeTearDown");
-            _extent.Flush();
+            _extent?.Flush();
         }
 
         [TearDown]
         public void Cleanup()
         {
-            bool passed = TestContext.CurrentContext.Result.Outcome.Status == NUnit.Framework.Interfaces.TestStatus.Passed;
+            bool passed = TestContext.CurrentContext.Result.Outcome.Status == TestStatus.Passed;
             var exec_status = TestContext.CurrentContext.Result.Outcome.Status;
             var stacktrace = string.IsNullOrEmpty(TestContext.CurrentContext.Result.StackTrace) ? ""
-            : string.Format("{0}", TestContext.CurrentContext.Result.StackTrace);
+                : string.Format("{0}", TestContext.CurrentContext.Result.StackTrace);
             Status logstatus = Status.Pass;
-            String screenShotPath, fileName;
+            string fileName;
 
             DateTime time = DateTime.Now;
             fileName = "Screenshot_" + time.ToString("h_mm_ss") + TC_Name + ".png";
@@ -184,24 +236,24 @@ namespace NUnitSeleniumPlayground
                 case TestStatus.Failed:
                     logstatus = Status.Fail;
                     /* The older way of capturing screenshots */
-                    screenShotPath = Capture(driver.Value, fileName);
-                    /* Capturing Screenshots using built-in methods in ExtentReports 4 */
-                    var mediaEntity = CaptureScreenShot(driver.Value, fileName);
-                    _test.Log(Status.Fail, "Fail");
+                    Capture(driver.Value!, fileName);
+                    /* Capturing Screenshots using built-in methods in ExtentReports 5 */
+                    var mediaEntity = CaptureScreenShot(driver.Value!, fileName);
+                    _test!.Log(Status.Fail, "Fail");
                     /* Usage of MediaEntityBuilder for capturing screenshots */
-                    _test.Fail("ExtentReport 4 Capture: Test Failed", mediaEntity);
+                    _test.Fail("ExtentReport 5 Capture: Test Failed", mediaEntity);
                     /* Usage of traditional approach for capturing screenshots */
                     _test.Log(Status.Fail, "Traditional Snapshot below: " + _test.AddScreenCaptureFromPath("Screenshots//" + fileName));
                     break;
                 case TestStatus.Passed:
                     logstatus = Status.Pass;
                     /* The older way of capturing screenshots */
-                    screenShotPath = Capture(driver.Value, fileName);
-                    /* Capturing Screenshots using built-in methods in ExtentReports 4 */
-                    mediaEntity = CaptureScreenShot(driver.Value, fileName);
-                    _test.Log(Status.Pass, "Pass");
+                    Capture(driver.Value!, fileName);
+                    /* Capturing Screenshots using built-in methods in ExtentReports 5 */
+                    mediaEntity = CaptureScreenShot(driver.Value!, fileName);
+                    _test!.Log(Status.Pass, "Pass");
                     /* Usage of MediaEntityBuilder for capturing screenshots */
-                    _test.Pass("ExtentReport 4 Capture: Test Passed", mediaEntity);
+                    _test.Pass("ExtentReport 5 Capture: Test Passed", mediaEntity);
                     /* Usage of traditional approach for capturing screenshots */
                     _test.Log(Status.Pass, "Traditional Snapshot below: " + _test.AddScreenCaptureFromPath("Screenshots//" + fileName));
                     break;
@@ -214,34 +266,33 @@ namespace NUnitSeleniumPlayground
                 default:
                     break;
             }
-            _test.Log(logstatus, "Test: " + TC_Name + " Status:" + logstatus + stacktrace);
+            _test?.Log(logstatus, "Test: " + TC_Name + " Status:" + logstatus + stacktrace);
 
             try
             {
-                ((IJavaScriptExecutor)driver.Value).ExecuteScript("lambda-status=" + (passed ? "passed" : "failed"));
+                ((IJavaScriptExecutor)driver.Value!).ExecuteScript("lambda-status=" + (passed ? "passed" : "failed"));
             }
             finally
             {
-
-                driver.Value.Quit();
+                driver.Value?.Quit();
             }
         }
 
-        public static string Capture(IWebDriver driver, String screenShotName)
+        public static string Capture(IWebDriver driver, string screenShotName)
         {
             ITakesScreenshot ts = (ITakesScreenshot)driver;
             Screenshot screenshot = ts.GetScreenshot();
-            var pth = System.Reflection.Assembly.GetCallingAssembly().CodeBase;
-            var actualPath = pth.Substring(0, pth.LastIndexOf("bin"));
-            var reportPath = new Uri(actualPath).LocalPath;
+            var path = System.Reflection.Assembly.GetCallingAssembly().Location;
+            var actualPath = Path.GetDirectoryName(path)!;
+            var reportPath = Path.GetFullPath(Path.Combine(actualPath, "..", "..", "..")) + Path.DirectorySeparatorChar;
+            
             Directory.CreateDirectory(reportPath + dirPath + "//Screenshots");
-            var finalpth = pth.Substring(0, pth.LastIndexOf("bin")) + dirPath + "//Screenshots//" + screenShotName;
-            var localpath = new Uri(finalpth).LocalPath;
-            screenshot.SaveAsFile(localpath, ScreenshotImageFormat.Png);
+            var finalPath = reportPath + dirPath + "//Screenshots//" + screenShotName;
+            screenshot.SaveAsFile(finalPath);
             return reportPath;
         }
 
-        public MediaEntityModelProvider CaptureScreenShot(IWebDriver driver, String screenShotName)
+        public Media CaptureScreenShot(IWebDriver driver, string screenShotName)
         {
             ITakesScreenshot ts = (ITakesScreenshot)driver;
             var screenshot = ts.GetScreenshot().AsBase64EncodedString;

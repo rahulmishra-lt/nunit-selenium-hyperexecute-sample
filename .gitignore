@@ -7,3 +7,5 @@ logs/
 nucleus.log
 artifacts
 NUnitHyperTestDemo/obj/
+hyperexecute
+hyperexecute-cli.log
